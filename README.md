@@ -192,7 +192,7 @@ Pensando em modo de backup, será gravado num cartão SD as informçãoes dos se
 
 ### Google Sheet
 
-Utilizando a extensão do Google Sheet, o **App Script**, é capaz de receber os dados do ESP32 via WiFi e assim, fazer a gravação na planilha.
+Utilizando a extensão do Google Sheet, o **App Script**, é capaz de receber os dados do ESP32 via WiFi e assim, fazer a gravação na planilha. <br>
 link planilha: https://docs.google.com/spreadsheets/d/1SxSW1ptz34iY43gRZqWlB8mrXascj9ZLxu0J4P3hlF8/edit?usp=sharing
 
 
