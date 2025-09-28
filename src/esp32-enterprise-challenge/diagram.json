@@ -1,0 +1,29 @@
+  {
+  "version": 1,
+  "author": "Raphael Silva",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 28.8, "left": -119.96, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht1", "top": -220.5, "left": 33, "attrs": {} },
+    { "type": "wokwi-microsd-card", "id": "sd1", "top": 125.03, "left": 153.67, "attrs": {} },
+    { "type": "wokwi-mpu6050", "id": "imu1", "top": 71.02, "left": -247.28, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "dht1:VCC", "esp:5V", "red", [ "v38.4", "h-57.6", "v-76.8", "h-134.4", "v230.4" ] ],
+    [ "esp:18", "sd1:SCK", "gray", [ "h153.6", "v9.6" ] ],
+    [ "sd1:DO", "esp:19", "gold", [ "h48", "v-9.49" ] ],
+    [ "esp:2", "dht1:SDA", "violet", [ "h0" ] ],
+    [ "imu1:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "imu1:SDA", "esp:21", "blue", [ "v-105.6", "h211.28", "v124.8" ] ],
+    [ "imu1:SCL", "esp:22", "green", [ "v-96", "h211.28", "v105.6" ] ],
+    [ "esp:3V3", "sd1:VCC", "red", [ "h-19.05", "v-57.6", "h393.6", "v172.8" ] ],
+    [ "esp:GND.1", "imu1:GND", "black", [ "h-38.25", "v-134.4", "h-28.8" ] ],
+    [ "dht1:GND", "esp:GND.1", "black", [ "v115.2", "h-201.6", "v172.8", "h-9.6" ] ],
+    [ "sd1:GND", "esp:GND.1", "black", [ "h57.6", "v124.91", "h-412.8", "v-96" ] ],
+    [ "sd1:CS", "esp:4", "green", [ "h-153.6", "v0.06" ] ],
+    [ "sd1:DI", "esp:23", "cyan", [ "h-134.4", "v-115.29" ] ]
+  ],
+  "dependencies": {}
+}
