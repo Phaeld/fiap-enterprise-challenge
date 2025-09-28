@@ -16,9 +16,9 @@
 - <a href="">Raphael da Silva</a> 
 - <a href="[https://www.linkedin.com/company/inova-fusca](https://www.linkedin.com/in/raphael-dinelli-8a01b278/)">Raphael Dinelli Neto</a>
 
-**Curso:** FIAP — Fase 5  
+**Curso:** FIAP — Fase 6  
 **Empresa parceira:** Hermes Reply  
-**Tema:** Modelagem de banco relacional + ML básico aplicado a dados de sensores industriais
+**Tema:** Criação MVP ESP32 + Sensores IoT, Banco de Dados, modelo Machine Learning e dashboard/relatório
 
 ## 👩‍🏫 Professores:
 ### Tutor(a) 
@@ -170,6 +170,32 @@ Em fases futuras, será possível realizar a **integração real com sensores f�
 
 ---
 
+## ESP32 e Sensores IoT
+
+<img src="./assets/esp.png">
+
+### Microcontrolador ESP323
+
+O microcontrolador ESP32 é o hardware principal, sendo ele responsável pegar os dados analisar e enviar via internet os dados a uma planilha do Google Sheet.
+
+### Sensor DHT22 (Leitura de temperatura)
+
+O sensor DHT22 é utilizado para fazer a leitura da temperatura da peça, fazendo controle total do equipamento.
+
+### Sensor MPU6050 (Simulando sensor de vibração nós 3 eixos)
+
+A utilização do MPU é pela vantagem de trabalhar com os 3 eixos, sem a necessidade de implementar 3 potenciometro. Assim, sendo que em cada eixo é analisando individualmente, caso um dos eixos não esteja no limite padrão, aparecerá na planilha **"HIGH" para uma alta vibração** e **"NORMAL" caso esteja na vibração limite**. 
+
+### Módulo SD Card (Para backup)
+
+Pensando em modo de backup, será gravado num cartão SD as informçãoes dos sensores, em paralelo a gravação na planilha do Google, abrindo o arquivo **data.csv** para gravação.
+
+### Google Sheet
+
+Utilizando a extensão do Google Sheet, o **App Script**, é capaz de receber os dados do ESP32 via WiFi e assim, fazer a gravação na planilha.
+
+
+---
 ## Dados Utilizados
 - **CSV**: `src/database/sensores.csv`  
   - Colunas: `id_leitura, id_sensor, id_peca, sensor_tipo, leitura_data_hora, tempo_uso, ciclos, temperatura, vibracao, falha, risco_falha`  
@@ -298,7 +324,7 @@ README.md
 - ✅ Diagrama DER
 - ✅ Script SQL inicial com o código de criação das tabelas
 - ✅ Algoritmos de classificação e predição dos estados das peças
-- ⬜ Implementação do MVP (futuro)
+- ✅ Implementação do MVP (futuro)
 
 ---
 
@@ -309,7 +335,7 @@ README.md
 
 ## 🗃 Histórico de lançamentos
 * 0.2.0 - 09/09/2025
-    *
+* 0.3.0 - 28/09/2025
 
 ## 📋 Licença
 
