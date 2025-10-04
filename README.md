@@ -34,6 +34,9 @@ Este projeto foi desenvolvido pelo grupo **SP e Interior** como parte do desafio
 
 Nosso objetivo é permitir **manutenção preditiva**, minimizando o tempo de máquina parada e reduzindo custos operacionais.
 
+MVP fim-a-fim de **manutenção preditiva** integrando:
+**sensores (simulados)** → **API Flask** → **MySQL** → **ML (batch)** → **Dashboard (Jinja + Chart.js)** → **Alertas**.
+
 ---
 
 ## 🎯 Objetivo do Sistema
@@ -52,15 +55,17 @@ Esses dados serão processados por modelos de Machine Learning que irão prever 
 
 ## 🧠 Tecnologias Utilizadas
 
-| Camada             | Tecnologia                          | Justificativa |
-|--------------------|-------------------------------------|---------------|
-| **Sensoriamento**  | ESP32                               | Coleta local de tempo, ciclos, temperatura e vibração |
-| **Armazenamento**  | AWS RDS (MySQL) ou DynamoDB         | Armazenamento confiável e escalável |
-| **Backend**        | Python                              | Processamento dos dados e integração com IA |
-| **Machine Learning**| Scikit-learn / TensorFlow          | Modelagem e predição de falhas |
-| **Análise de Dados**| Pandas / NumPy                     | Manipulação e análise de dados históricos |
-| **Visualização**   | Matplotlib / Seaborn                | Geração de gráficos e dashboards |
-| **Nuvem**          | AWS EC2                             | Processamento remoto e simulação de ambiente industrial |
+## 🧠 Tecnologias Utilizadas
+
+| Camada               | Tecnologia                                      | Observações |
+|----------------------|--------------------------------------------------|-------------|
+| Ingestão/API         | Flask, Flask-Admin, Flask-Migrate, Flask-CORS    | Endpoints REST + painel admin |
+| Banco de Dados       | MySQL 8 + Adminer                                | DDL auto-executado no init do container |
+| ORM/Migrações        | SQLAlchemy + Alembic                             | Migrações habilitadas |
+| Simulador            | Python (requests)                                | Serviço `simulator` no docker-compose |
+| ML                   | scikit-learn, pandas, numpy, joblib              | Treino batch a partir do banco/CSV |
+| Dashboard            | Jinja2 + Chart.js                                | Séries reais + snapshot de risco |
+| Contêineres          | Docker Compose                                   | Serviços: `db`, `adminer`, `web`, `simulator` |
 
 ---
 
@@ -83,6 +88,16 @@ Esses dados serão processados por modelos de Machine Learning que irão prever 
 
 5. **Visualização e Alertas**  
    - Dashboards e alertas automatizados com base nas previsões
+---
+
+**Fluxo resumido:**
+1. **Simulador** envia leituras (`POST /api/readings`) a cada `INTERVAL_SEC`.  
+2. **API Flask** valida e persiste em `LEITURAS_SENSOR`; regra simples gera **FALHAS**/**ALERTAS**.  
+3. **Batch ML** lê do MySQL e gera `sensores.csv` (`app.generate_csv`).  
+4. Scripts de treino geram modelos:  
+   - `modelo_falha_24h.joblib` (falha nas próximas 24h)  
+   - `modelo_estado_peca.joblib` (Saudável/Desgastada/Crítica)  
+5. **Dashboard** consome endpoints (`/api/readings/series`, `/api/predict/snapshot`) e exibe KPIs/gráficos.
 
 ---
 
@@ -94,40 +109,22 @@ A imagem abaixo representa a arquitetura proposta do sistema, integrando sensore
 
 ---
 
-## 📆 Plano de Desenvolvimento
-
-1. Simulação dos dados de sensores
-2. Modelagem relacional do banco de dados
-3. Criação do pipeline de ingestão e armazenamento
-4. Desenvolvimento do modelo de IA
-5. Criação de dashboards com alertas preditivos
-6. Integração final e testes
-
----
-
-# Objetivo desta etapa
-Construir um **banco de dados relacional** normalizado para armazenar leituras de sensores industriais e, a partir desses dados, treinar **dois modelos de ML**:
-1. **Classificação** do estado da peça (**Saudável / Desgastada / Crítica**).
-2. **Previsão** de falha em horizonte fixo (**próximas 24h**).
-
-## Visão Geral da Solução
-- **Coleta (simulada):** leituras de temperatura/vibração + tempo de uso e ciclos.  
-- **Armazenamento:** modelo relacional com tabelas de peças, sensores, ciclos, leituras, falhas e alertas.  
-- **ML:**  
-  - Modelo 1: RandomForest multiclasse (estado da peça).  
-  - Modelo 2: GradientBoosting binário (falha em 24h) com features de janela.  
-- **Documentação:** DER exportado, DDL, CSV e gráficos de resultado.
-
 ## 🧱 Modelagem de Banco de Dados
 
 ### Principais Entidades:
 
-- **PECAS**: id_peca (PK), tipo, fabricante, tempo_uso_total
-- **SENSORES**: id_sensor (PK), tipo_sensor, id_peca (FK -> PECAS)
-- **CICLOS_OPERACAO**: id_ciclo (PK), id_peca (FK -> PECAS), data_inicio, data_fim, duracao
-- **LEITURAS_SENSOR**: id_leitura (PK), id_sensor (FK -> SENSORES), leitura_valor, leitura_data_hora
-- **FALHAS**: id_falha (PK), id_peca (FK PECAS), descricao, data
-- **ALERTAS**: id_alerta (PK), id_falha (FK -> FALHAS), nivel_risco
+**Tabelas** (MySQL 8, adaptado do DER Oracle):
+- `PECAS` (PK `id_peca`)
+- `SENSORES` (PK `id_sensor`, FK → `PECAS`)
+- `CICLOS_OPERACAO` (PK `id_ciclo`, FK → `PECAS`)
+- `LEITURAS_SENSOR` (PK `id_leitura`, FK → `SENSORES`)
+- `FALHAS` (PK `id_falha`, FK → `PECAS`)
+- `ALERTAS` (PK `id_alerta`, FK → `FALHAS`)
+
+**Chaves & Integridade:**
+- `SENSORES.id_peca` com `ON DELETE SET NULL`
+- `CICLOS_OPERACAO.id_peca`, `FALHAS.id_peca`, `ALERTAS.id_falha` com `ON DELETE CASCADE`
+- Índices em FKs para desempenho.
 
 ### Relacionamentos:
 
@@ -138,7 +135,7 @@ Construir um **banco de dados relacional** normalizado para armazenar leituras d
 - Cada falha pode gerar múltiplos alertas (1:N)
 
 ### DDL
- - `src/database/DDL.sql`
+ - `src/app/database/DDL.sql`
 
 ### DER
 Imagem exportada do Oracle SQL Developer Data Modeler:
@@ -149,14 +146,28 @@ Imagem exportada do Oracle SQL Developer Data Modeler:
 </p>
 
 ### Script DDL
-- `src/database/DDL.sql`  
+- `src/app/database/DDL.sql`
+
+**Criação automática (primeiro start):**  
+`src/app/database/DDL.sql` é montado no container MySQL (init script).  
+Volume `dbdata` preserva dados entre reinícios.
 
 ---
 
 ## 📊 Estratégia de Coleta de Dados
 
 Nesta fase inicial, os dados serão **simulados** por meio de scripts Python que imitam a operação dos sensores conectados a um ESP32.
-Devido a quantidade de sensores e dados necessários para treinar os modelos, optamos pela simulação via script, pois permite maior aleatóriedade dos dados.
+
+## 🔌 Coleta e Ingestão
+
+**Simulador** (`services.simulator` no compose) envia:
+```json
+POST /api/readings
+{
+  "id_sensor": 1,
+  "leitura_valor": 55.2,
+  "leitura_data_hora": "2025-10-04T12:00:00Z"
+}
 
 Serão gerados:
 
@@ -164,7 +175,8 @@ Serão gerados:
 - Leituras de temperatura variando com o tempo
 - Eventos de falha simulados para treinar o modelo
 
-Em fases futuras, será possível realizar a **integração real com sensores físicos ESP32**, via conexão Wi-Fi e envio dos dados diretamente para o banco na nuvem.
+Alertas/Falhas:
+No endpoint /api/readings, um limiar + streak gera registros em FALHAS e ALERTAS.
 
 **Script para consolidação dos dados das tabelas sql em arquivo csv**: `src/database/csv_create.sql`
 
@@ -195,19 +207,34 @@ Pensando em modo de backup, será gravado num cartão SD as informçãoes dos se
 Utilizando a extensão do Google Sheet, o **App Script**, é capaz de receber os dados do ESP32 via WiFi e assim, fazer a gravação na planilha. <br>
 link planilha: https://docs.google.com/spreadsheets/d/1SxSW1ptz34iY43gRZqWlB8mrXascj9ZLxu0J4P3hlF8/edit?usp=sharing
 
+## 📊 Dashboard e API
+
+- **Dashboard** (`/`): KPIs e gráficos (Chart.js)
+- **Série temporal**: `/api/readings/series?sensor_id=...&minutes=...`
+- **Snapshot ML**: `/api/predict/snapshot?threshold=0.5&temp_minutes=15&vib_minutes=5`
+- **Admin**: `/admin` (Flask-Admin)
+- **Healthcheck**: `/health`
+- **Listar sensores**: `/api/sensors`
 
 ---
 ## Dados Utilizados
-- **CSV**: `src/database/sensores.csv`  
+- **CSV**: `src/app/database/sensores.csv`  
   - Colunas: `id_leitura, id_sensor, id_peca, sensor_tipo, leitura_data_hora, tempo_uso, ciclos, temperatura, vibracao, falha, risco_falha`  
   - **Observação:** as colunas `temperatura` e `vibracao` são valores consolidados “último conhecido por peça” até o timestamp.
 
 ---
 
-## Machine Learning
+## 🤖 Machine Learning Integrado
+
+### Dataset a partir do banco
+O módulo `app.generate_csv` lê o MySQL e gera **`/app/app/database/sensores.csv`** com colunas:
+id_leitura, id_sensor, id_peca, sensor_tipo, leitura_data_hora,
+tempo_uso, ciclos, temperatura, vibracao,
+falha_evento, # 1 se houver FALHAS na peça no instante (match tolerância)
+falha, falha_prob, risco_falha # inferência atual via modelo
 
 ### Modelo 1 — Classificação do estado da peça
-- **Arquivo:** `src/machine-learning/part_status_classifier.py`  
+- **Arquivo:** `src/ml/part_status_classifier.py`  
 - **Problema:** multiclasse (Saudável / Desgastada / Crítica), mapeado do rótulo `risco_falha`.  
 - **Features:** `tempo_uso`, `ciclos`, `temperatura`, `vibracao`.  
 - **Algoritmo:** `RandomForestClassifier`.  
@@ -222,7 +249,7 @@ link planilha: https://docs.google.com/spreadsheets/d/1SxSW1ptz34iY43gRZqWlB8mrX
   - `src/machine-learning/models/modelo_estado_peca.joblib`
 
 ### Modelo 2 — Previsão de falha nas próximas 24h
-- **Arquivo:** `src/machine-learning/failure_predict24_hours.py`  
+- **Arquivo:** `src/ml/machine-learning/failure_predict24_hours.py`  
 - **Problema:** binário (falha nas próximas 24h).  
 - **Rótulo:** `fail_next_h` (1 se existir `falha==1` para a **mesma peça** em `(t, t+24h]`).  
 - **Features:** básicas + janelas móveis (médias, desvios e deltas 3/6/12 passos).  
@@ -257,33 +284,59 @@ link planilha: https://docs.google.com/spreadsheets/d/1SxSW1ptz34iY43gRZqWlB8mrX
 
 ---
 
-## Como Reproduzir
+## ▶️ Como Executar (Reprodutibilidade)
 
-### Ambiente Local
+**Pré-requisitos:** Docker Desktop com Compose.
+
+**Subir tudo (na pasta `src/`):**
 ```bash
-# Python 3.9+
-pip install -r requirements.txt
-# Rodar modelo 1
-python src/machine-learning/part_status_classifier.py
-# Rodar modelo 2
-python src/machine-learning/failure_predict24_hours.py
-```
+docker compose up --build
 
-**requirements.txt** sugerido
+Web: http://localhost:5001
+
+Adminer: http://localhost:8080
+ (Server: db; User: app; Pass: app; DB: challenge)
+
+
+Ver logs:
 
 ```bash
-pandas
-numpy
-scikit-learn
-matplotlib
-joblib
-```
+docker compose logs -f web simulator
 
-### Google Colab
- - Faça upload de sensores.csv e copie para src/database/sensores.csv.
- - Instale dependências: !pip -q install pandas numpy scikit-learn matplotlib joblib.
- - Execute os scripts (células fornecidas neste repositório/README).
- - Baixe os gráficos de assets/ e faça commit no repositório.
+
+Gerar CSV a partir do banco:
+
+```bash
+docker compose exec web python -m app.generate_csv
+
+
+Treinar modelos:
+
+# Falha 24h
+```bash
+docker compose exec web python -m app.ml.failure_predict_24_hours
+
+# Estado da peça
+```bash
+docker compose exec web python -m app.ml.piece_state_classifier
+
+# (opcional) recarregar web para lazy-load de modelos
+```bash
+docker compose restart web
+
+
+Testar endpoints:
+
+curl http://localhost:5001/health
+curl "http://localhost:5001/api/sensors"
+curl -X POST http://localhost:5001/api/readings -H "Content-Type: application/json" \
+  -d '{"id_sensor":1,"leitura_valor":55.2,"leitura_data_hora":"2025-10-04T12:00:00Z"}'
+
+
+Reset do banco (opcional):
+
+docker compose down -v   # remove volume dbdata
+docker compose up --build
 
 ---
 
@@ -291,24 +344,47 @@ joblib
 
 ```bash
 assets/
-  Diagrama-ER.png
-  feature_importance_estado.png
-  matriz_confusao_estado.png
-  matriz_confusao_falha_24h.png
-  roc_falha_24h.png
+  logo-fiap.png
+  fiap_reply_mvp.png
+  ... (gráficos gerados pelos treinos)
+
+docs/
+  arquitetura/
+    fiap_reply_mvp.drawio
+    fiap_reply_mvp.png
 
 src/
-  database/
-    DDL.sql
-    sensores.csv
-  machine-learning/
-    part_status_classifier.py
-    failure_predict24_hours.py
-    models/
-      modelo_estado_peca.joblib
-      modelo_falha_24h.joblib
-
-README.md
+  docker-compose.yml
+  requirements.txt
+  Dockerfile
+  app/
+    wsgi.py
+    config.py
+    extensions.py
+    models.py
+    database/
+      DDL.sql
+      sensores.csv
+    api/
+      routes.py
+      cycles.py
+      alerts.py
+    views/
+      template/
+        dashboard.html
+      static/
+        js/...
+        css/...
+    simulator/
+      sensor_sim.py
+    ml/
+      predict.py
+      failure_predict_24_hours.py
+      piece_state_classifier.py
+      # modelos salvos em:
+      # /app/app/ml/modelo_falha_24h.joblib
+      # /app/app/ml/modelo_estado_peca.joblib
+    generate_csv.py
 
 ```
 
@@ -316,27 +392,45 @@ README.md
 
 - https://www.youtube.com/watch?v=gZ8fwobi3Y4
 
-## ✅ Status da Entrega
-
-- ✅ Definição da arquitetura da solução
-- ✅ Modelagem inicial do banco de dados
-- ✅ Escolha das tecnologias e justificação
-- ✅ README documentado
-- ✅ Diagrama DER
-- ✅ Script SQL inicial com o código de criação das tabelas
-- ✅ Algoritmos de classificação e predição dos estados das peças
-- ✅ Implementação do MVP (futuro)
+## ✅ Mapeamento aos Requisitos do Challenge
+✅ 4.1 Arquitetura Integrada: diagrama em docs/arquitetura/ com fluxos, formatos (JSON/CSV) e periodicidades.
+✅ 4.2 Coleta e Ingestão: simulador Python (serviço simulator) + logs e séries no dashboard.
+✅ 4.3 Banco de Dados: DDL em src/app/database/DDL.sql, chaves e restrições documentadas.
+✅ 4.4 ML Básico Integrado: treino batch a partir do banco/CSV, métricas e figuras (matriz/ROC/feature importance).
+✅ 4.5 Visualização e Alertas: dashboard com KPIs e alertas por threshold/streak; endpoints públicos.
+✅ 4.6 Reprodutibilidade: Dockerfile, docker-compose.yml, requirements.txt, passos de execução no README.
 
 ---
 
-## 📎 Observações
-- Dados utilizados nesta fase são simulados, devido a quantidade de dados necessárias para cada sensor.
----
+## 📈 Resultados (exemplo)
+Estado da Peça: relatório de classificação + matriz de confusão; importância de features.
+
+Falha 24h: ROC-AUC e matriz de confusão.
+
+Em dados altamente desbalanceados, ajustar limiares e analisar métricas por classe.
+O simulador pode ser parametrizado para gerar mais FALHAS (reduzindo ALERT_THRESH e ALERT_MIN_STREAK) para enriquecer o treinamento.
+
+## 🧩 Decisões Técnicas
+MySQL em container com Adminer → rápida avaliação e reprodutibilidade.
+Execução do DDL no init do MySQL → “migrations” iniciais sem fricção.
+Simulador separado do backend → desacoplamento e fácil ajuste de volume de dados.
+Modelos em app/ml → a API carrega .joblib dessa pasta (padronização).
+Chart.js no front → simplicidade e leveza.
+Flask-Admin → CRUD mínimo para avaliação.
+
+## 🛠️ Troubleshooting
+TemplateNotFound dashboard.html: confirme views/template (sem “s”) e Blueprint(..., template_folder="template").
+NameError: and_ is not defined: importe from sqlalchemy import and_ nos endpoints.
+left keys must be sorted (merge_asof): o generate_csv.py já faz sort_values por peça e timestamp.
+Input X contains NaN: pipeline faz imputação (ffill/bfill + mediana). Gere CSV novamente.
+y contains 1 class no treino: gere FALHAS (ajuste thresholds/streak) → gere CSV → re-treine.
+Modelo não encontrado: confirme .joblib em /app/app/ml e reinicie web.
 
 
 ## 🗃 Histórico de lançamentos
 * 0.2.0 - 09/09/2025
 * 0.3.0 - 28/09/2025
+* 1.0.0 — 04/10/2025 (MVP integrado com Docker, ingestão, ML e dashboard)
 
 ## 📋 Licença
 
