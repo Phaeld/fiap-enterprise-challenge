@@ -390,7 +390,7 @@ src/
 
 ## Link do video explicativo: 
 
-- https://www.youtube.com/watch?v=gZ8fwobi3Y4
+- [https://www.youtube.com/watch?v=gZ8fwobi3Y4](https://youtube.com/shorts/DSUNuPgi4ic)
 
 ## ✅ Mapeamento aos Requisitos do Challenge
 ✅ 4.1 Arquitetura Integrada: diagrama em docs/arquitetura/ com fluxos, formatos (JSON/CSV) e periodicidades.
