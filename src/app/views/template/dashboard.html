@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-2">
+  <label class="form-label m-0">Sensor:</label>
+  <select id="sensorSelect" class="form-select form-select-sm" style="width:auto"></select>
+
+  <label class="form-label m-0 ms-3">Janela (min):</label>
+  <input id="minutesInput" type="number" value="60" min="1" max="720"
+         class="form-control form-control-sm" style="width:100px">
+</div>
+<div id="chart"></div>
+
+<script>
+async function loadSensors() {
+  const r = await fetch('/api/sensors');
+  const sensors = await r.json();
+  const sel = document.getElementById('sensorSelect');
+  sel.innerHTML = sensors.map(s =>
+    `<option value="${s.id_sensor}">${s.id_sensor} — ${s.tipo_sensor} (peça ${s.id_peca})</option>`
+  ).join('');
+  if (!sel.value && sensors.length) sel.value = sensors[0].id_sensor;
+}
+
+async function plot() {
+  const id = document.getElementById('sensorSelect').value;
+  const minutes = document.getElementById('minutesInput').value || 60;
+  const r = await fetch(`/api/readings/series?sensor_id=${id}&minutes=${minutes}`);
+  const data = await r.json();
+
+  const trace = { x: data.x, y: data.y, mode: 'lines', name: `Sensor ${data.sensor_id}` };
+  const layout = { margin: {t: 10}, xaxis: {title: 'Tempo'}, yaxis: {title: 'Valor'} };
+  Plotly.react('chart', [trace], layout);
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadSensors();
+  await plot();
+  document.getElementById('sensorSelect').addEventListener('change', plot);
+  document.getElementById('minutesInput').addEventListener('change', plot);
+  setInterval(plot, 3000); // atualiza a cada 3s
+});
+</script>
+
+<div class="row g-3 mt-3">
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title mb-2">Prob. de falha (24h) por peça</h5>
+        <div id="chartFailProb"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title mb-2">Estados previstos (distribuição)</h5>
+        <div id="chartEstados"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+async function fetchSnapshot() {
+  const r = await fetch('/api/predict/snapshot?threshold=0.5&temp_minutes=15&vib_minutes=5');
+  return await r.json();
+}
+
+function renderFailProb(snapshot) {
+  const x = snapshot.map(d => `Peça ${d.id_peca}`);
+  const y = snapshot.map(d => Math.round(d.falha24_prob * 1000) / 10); // %
+  const tr = [{ x, y, type: 'bar', name: 'Prob. 24h (%)' }];
+  const layout = { margin:{t:10}, yaxis:{title:'%', range:[0,100]} };
+  Plotly.react('chartFailProb', tr, layout);
+}
+
+function renderEstados(snapshot) {
+  // conta por classe (0,1,2... ou string)
+  const counts = {};
+  snapshot.forEach(d => {
+    const k = String(d.estado_pred);
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  const labels = Object.keys(counts);
+  const values = labels.map(k => counts[k]);
+  const tr = [{ labels, values, type: 'pie', hole: 0.3 }];
+  const layout = { margin:{t:10} };
+  Plotly.react('chartEstados', tr, layout);
+}
+
+async function refreshPredict() {
+  try {
+    const snapshot = await fetchSnapshot();
+    renderFailProb(snapshot);
+    renderEstados(snapshot);
+  } catch (e) { console.error('predict snapshot error', e); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  refreshPredict();
+  setInterval(refreshPredict, 5000); // atualiza a cada 5s
+});
+</script>
+
+
+{% endblock %}
